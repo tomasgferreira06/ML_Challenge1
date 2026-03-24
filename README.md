@@ -1,77 +1,118 @@
-# Instalação
+# Binary Bean Classification — Morphological Feature Analysis
 
-## Passo 1: Cria um Ambiente Virtual (VENV)
-`py -m venv venv`
+![Python](https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white)
+![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?logo=jupyter&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-F7931E?logo=scikit-learn&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-Data-150458?logo=pandas&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-Compute-013243?logo=numpy&logoColor=white)
+![License](https://img.shields.io/badge/License-Academic-lightgrey)
 
+---
 
-## Passo 2:
-`.\venv\Scripts\activate`
+## Overview
 
-## Passo 3:
-`pip install -r requirements.txt`
+This project was developed for the **Machine Learning** course unit of the **Master's in Artificial Intelligence** at the **University of Coimbra** (DEI). It addresses a binary classification problem in the context of food safety: detecting and segregating an allergenic bean variety (*White Haricot Bean*) from a mixed production line using morphological measurements extracted from imaging systems.
 
+The core constraint is asymmetric misclassification cost — a false negative (an allergenic bean classified as safe) carries public health risk, while a false positive (a safe bean rejected) only incurs operational cost. This makes **recall of the allergenic class** the primary optimization target.
 
-# Problema Escolhido
+---
 
-## 🌾 **Cenário 2: Agricultor - Maximizar Lucro da Colheita**
+## Problem Statement
 
-**Situação:**  
-Tens 10 toneladas de feijões misturados após a colheita. O White Haricot vale **3x mais** que Mixed Beans no mercado grossista.
+A food processing facility packages mixed dry bean products. One variety, the White Haricot Bean, contains an allergenic protein compound. The objective is to build a classifier that identifies this variety from six quantitative morphological features, minimizing contamination risk.
 
-**O Problema:**  
-Se classificares **White Haricot como Mixed** (falso negativo):
-- Vendes produto premium pelo preço normal
-- Perda direta de receita (€5/kg → €2/kg)
-- Desperdiças o potencial da tua colheita
+The dataset (`binary_beans_english.csv`) is a synthetic dataset containing **6,000 observations** with six continuous predictive variables  (`Length`, `Width`, `Area`, `Perimeter`, `Roundness`, `Compactness`) and a binary target (`White Haricot Bean` vs `Mixed Other Beans`). The class distribution is imbalanced (~63% White Haricot Bean, ~37% Mixed Other Beans).
 
-Se classificares **Mixed como White** (falso positivo):
-- O grossista vai detetar e devolver o lote
-- Perdes credibilidade
+---
 
-**Questão:**  
-Qual métrica te ajuda a **capturar TODO o valor premium** da colheita, mesmo que tenhas de verificar manualmente alguns lotes?
+## Methodology
 
-**Resposta: Recall (White Haricot)**
+### Data Preprocessing
 
-**Porquê?**  
-Recall responde: "De TODO o White Haricot real que tenho, quanto % consegui identificar?"
+- Removal of observations with missing values in either features or target (190 rows, ~3% of the dataset), following a listwise deletion strategy.
+- Label encoding: `White Haricot Bean → 1`, `Mixed Other Beans → 0`.
 
-**Alto Recall = Não deixar escapar produto premium**
-- Capturas a maior parte do feijão premium disponível
-- Maximizas a receita da colheita
-- Podes fazer inspeção manual nos casos duvidosos
+### Exploratory Data Analysis
 
-**Estratégia inteligente:**  
-Se o modelo diz que é White Haricot mas tem baixa confiança, fazes inspeção visual. Mas NUNCA queres que White Haricot real seja classificado como Mixed!
+- Univariate analysis via histograms and density plots per class.
+- Bivariate analysis through boxplots, pairplots, and Spearman correlation matrix.
+- Key finding: dimensional features (`Length`, `Width`, `Area`, `Perimeter`) exhibit strong inter-class separation; shape features (`Roundness`, `Compactness`) show high overlap between classes.
 
+### Feature Selection
 
-# Problema Escolhido - Prompt melhorado
+- **Spearman Correlation Analysis** — identified high multicollinearity among dimensional features (e.g., `Area` ↔ `Width`: ρ = 0.89) and near-zero linear correlation of `Roundness` with the target.
+- **ReliefF Algorithm** — produced a non-linear importance ranking. Notably, `Roundness` ranked third despite low linear correlation, indicating contextual discriminative value captured through feature interactions. `Compactness` and `Width` ranked lowest and were removed for the reduced feature set.
 
-1. O Problema 🌾
-Um agricultor tem uma colheita que mistura dois tipos de feijão: White Haricot (um produto premium que vale 3x mais) e Mixed Beans (um produto comum).
+### Feature Engineering
 
-O problema central é que os dois tipos de erros que um modelo de classificação pode cometer ao tentar separá-los têm impactos de negócio muito diferentes e desiguais.
+- Derived features including aspect ratio, elongation index, and geometric combinations were explored via ReliefF re-evaluation and Spearman analysis.
 
-2. Explicação do Problema
-Temos de analisar as duas formas como o nosso modelo pode falhar e o que cada falha custa ao agricultor:
+### Data Preparation
 
-Erro A: O Falso Negativo (Classificar Premium como Comum)
+- Stratified 75/25 train-test split to preserve class proportions.
+- StandardScaler normalization fitted on training data only to prevent data leakage.
+- Two feature configurations tested: full set (6 features) and reduced set (4 features after ReliefF-guided removal).
 
-O que acontece: O modelo olha para um feijão White Haricot (valioso) e classifica-o erradamente como Mixed Beans (barato).
+### Models
 
-Impacto no Negócio: O agricultor vende o seu melhor produto ao preço baixo. Isto é uma perda de receita direta, imediata e irrecuperável.
+| Model | Key Hyperparameters |
+|---|---|
+| Decision Tree | `max_depth` tuned via recall curve (optimal: 3) |
+| K-Nearest Neighbors | `k` tuned from 1–49 (optimal: 49 full / 35 reduced) |
+| Logistic Regression | Default with `max_iter=1000` |
+| KNN + PCA | PCA with 2 and 3 components combined with tuned KNN |
 
-Erro B: O Falso Positivo (Classificar Comum como Premium)
+---
 
-O que acontece: O modelo olha para Mixed Beans (baratos) e classifica-os erradamente como White Haricot (valiosos).
+## Results
 
-Impacto no Negócio: O lote "premium" fica contaminado. O distribuidor deteta a mistura, recusa a encomenda e o agricultor perde credibilidade (ou, em alternativa, tem de pagar por uma inspeção manual para limpar o lote antes de o enviar).
+### Global Metrics
 
-3. O Nosso Objetivo 🎯
-Ao comparar os dois erros, a perda de receita (Erro A) é o pior cenário para o negócio. A perda de credibilidade ou o custo de inspeção manual (Erro B) é um problema gestionável, mas menos grave do que perder 3x o valor do produto.
+| Model | Accuracy | Precision | Recall | F1-score |
+|---|---|---|---|---|
+| Decision Tree (depth=3) | 0.810 | 0.814 | 0.810 | 0.802 |
+| KNN (k=49) | 0.818 | 0.816 | 0.818 | 0.814 |
+| KNN Reduced (k=35) | 0.826 | 0.824 | 0.826 | 0.823 |
+| Logistic Regression | 0.821 | 0.819 | 0.821 | 0.819 |
+| KNN + PCA(2) | 0.806 | 0.804 | 0.806 | 0.802 |
+| KNN + PCA(3) | 0.820 | 0.818 | 0.820 | 0.816 |
 
-Portanto, o objetivo do nosso modelo é garantir que nenhum White Haricot verdadeiro seja deixado para trás.
+### White Haricot Bean (Allergenic Class)
 
-Tecnicamente, isto significa que temos de Maximizar o RECALL (Sensibilidade) da classe "White Haricot".
+| Model | Precision | Recall | F1-score |
+|---|---|---|---|
+| **Decision Tree (depth=3)** | 0.800 | **0.933** | 0.861 |
+| KNN (k=49) | 0.828 | 0.898 | 0.862 |
+| KNN Reduced (k=35) | 0.836 | 0.902 | 0.868 |
+| Logistic Regression | 0.841 | 0.884 | 0.862 |
+| KNN + PCA(2) | 0.816 | 0.894 | 0.854 |
+| KNN + PCA(3) | 0.830 | 0.899 | 0.863 |
 
-O nosso objetivo é construir um modelo que encontre todos os feijões premium, mesmo que isso signifique "apanhar" alguns feijões comuns pelo caminho (Erro B), que podem depois ser tratados manualmente.
+The **Decision Tree (max_depth=3)** achieved the highest recall for the allergenic class at **0.933**, making it the selected model. This comes at the cost of lower recall on the safe class (0.599), which translates to higher operational waste but minimizes contamination risk, an acceptable trade-off given the problem constraints.
+
+---
+
+## Tech Stack
+
+- **Python 3.x**
+- **pandas** / **NumPy** — data manipulation and numerical computation
+- **matplotlib** / **seaborn** — visualization (histograms, boxplots, density plots, heatmaps, pairplots)
+- **scikit-learn** — `DecisionTreeClassifier`, `KNeighborsClassifier`, `LogisticRegression`, `PCA`, `StandardScaler`, `train_test_split`, evaluation metrics
+- **skrebate** — ReliefF feature importance algorithm
+
+---
+
+## Conclusions and Future Work
+
+The Decision Tree classifier was selected as the most appropriate model for the food safety use case, prioritizing recall of the allergenic class over global accuracy. However, the resulting false positive rate raises questions about economic viability in a production environment.
+
+The main recommendation for future work is **dataset enrichment**, the current morphological features are insufficient for high-precision separation. Adding features with greater discriminative power (e.g., color, texture) could reduce false positives without compromising safety guarantees.
+
+---
+
+## Authors
+
+- **Tomás Ferreira** — University of Coimbra
+- **Eduardo Pereira** — University of Coimbra
+
+*Developed for the Machine Learning course, MSc in Artificial Intelligence, University of Coimbra — November 2025*
